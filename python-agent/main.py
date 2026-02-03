@@ -10,6 +10,10 @@ from dotenv import load_dotenv
 from browser_use import Agent, Browser, BrowserProfile, ChatGoogle
 import tempfile
 from pathlib import Path
+from browser_patch import apply_patches
+
+# Apply the "Deep Fix" for radio buttons at runtime
+apply_patches()
 
 import logging
 
