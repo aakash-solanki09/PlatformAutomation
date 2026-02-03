@@ -27,6 +27,7 @@ function App() {
   );
   const [username, setUsername] = useState("SYNETALAAKASH@GMAIL.COM");
   const [password, setPassword] = useState("aakash@123");
+  const [platform, setPlatform] = useState("LinkedIn");
 
   const [loading, setLoading] = useState(false);
   const [applicationId, setApplicationId] = useState<string | null>(null);
@@ -79,6 +80,7 @@ function App() {
     formData.append("rules", rules);
     formData.append("username", username);
     formData.append("password", password);
+    formData.append("platformName", platform);
 
     try {
       const res = await axios.post(`${API_BASE}/apply`, formData, {
@@ -153,7 +155,10 @@ function App() {
                 <div className="space-y-8">
                   {/* Job URL */}
                   <div className="space-y-3 group/field">
-                    <label htmlFor="jobUrl" className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3 px-1 group-focus-within/field:text-blue-400 transition-colors">
+                    <label
+                      htmlFor="jobUrl"
+                      className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3 px-1 group-focus-within/field:text-blue-400 transition-colors"
+                    >
                       <Globe size={16} /> Target Job Link
                     </label>
                     <input
@@ -163,14 +168,48 @@ function App() {
                       placeholder="linkedin.com/jobs/view/..."
                       className="w-full px-8 py-5 rounded-3xl input-glass outline-none text-white placeholder:text-slate-800 text-xl font-medium"
                       value={jobUrl}
-                      onChange={(e) => setJobUrl(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setJobUrl(val);
+                        // Auto-detect platform from URL
+                        if (val.toLowerCase().includes("indeed.com"))
+                          setPlatform("Indeed");
+                        else if (val.toLowerCase().includes("glassdoor.com"))
+                          setPlatform("Glassdoor");
+                        else if (val.toLowerCase().includes("linkedin.com"))
+                          setPlatform("LinkedIn");
+                      }}
                     />
+                  </div>
+
+                  {/* Platform Selection */}
+                  <div className="space-y-3 group/field">
+                    <label
+                      htmlFor="platform"
+                      className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3 px-1"
+                    >
+                      <Globe size={16} /> Target Platform
+                    </label>
+                    <select
+                      id="platform"
+                      className="w-full px-8 py-5 rounded-3xl input-glass outline-none text-white appearance-none cursor-pointer text-lg font-medium"
+                      value={platform}
+                      onChange={(e) => setPlatform(e.target.value)}
+                    >
+                      <option value="LinkedIn">LinkedIn</option>
+                      <option value="Indeed">Indeed</option>
+                      <option value="Glassdoor">Glassdoor</option>
+                      <option value="Generic">Generic / Other</option>
+                    </select>
                   </div>
 
                   {/* Credentials Row */}
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-3 group/field">
-                      <label htmlFor="username" className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3 px-1">
+                      <label
+                        htmlFor="username"
+                        className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3 px-1"
+                      >
                         <User size={16} /> Platform Email
                       </label>
                       <input
@@ -183,7 +222,10 @@ function App() {
                       />
                     </div>
                     <div className="space-y-3 group/field">
-                      <label htmlFor="password" className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3 px-1">
+                      <label
+                        htmlFor="password"
+                        className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3 px-1"
+                      >
                         <Lock size={16} /> Password
                       </label>
                       <input
@@ -238,7 +280,10 @@ function App() {
 
                   {/* Strategy Logic */}
                   <div className="space-y-3 group/field">
-                    <label htmlFor="rules" className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3 px-1 group-focus-within/field:text-blue-400 transition-colors">
+                    <label
+                      htmlFor="rules"
+                      className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3 px-1 group-focus-within/field:text-blue-400 transition-colors"
+                    >
                       <Settings2 size={16} /> Strategy Logic
                     </label>
                     <textarea

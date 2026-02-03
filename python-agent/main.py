@@ -51,23 +51,29 @@ client = AsyncIOMotorClient(mongodb_uri)
 db = client.get_database() # Uses the DB from URI or default
 sessions_collection = db.user_sessions
 
-async def load_session(username: str):
-    """Loads storage state from MongoDB."""
-    session = await sessions_collection.find_one({"username": username})
+async def load_session(username: str, platform: str):
+    """Loads storage state from MongoDB, isolated by platform."""
+    session = await sessions_collection.find_one({
+        "username": username,
+        "platform_name": platform.lower()
+    })
     if session:
-        print(f"📦 Found saved session for {username} in DB.")
+        print(f"📦 Found saved session for {username} on {platform} in DB.")
         return session.get("sessionData")
-    print(f"� No saved session for {username} in DB.")
+    print(f"➖ No saved session for {username} on {platform} in DB.")
     return None
 
-async def save_session(username: str, session_data: dict):
-    """Saves storage state to MongoDB."""
+async def save_session(username: str, platform: str, session_data: dict):
+    """Saves storage state to MongoDB, isolated by platform."""
     await sessions_collection.update_one(
-        {"username": username},
-        {"$set": {"sessionData": session_data, "updatedAt": asyncio.get_event_loop().time()}},
+        {"username": username, "platform_name": platform.lower()},
+        {"$set": {
+            "sessionData": session_data, 
+            "updatedAt": asyncio.get_event_loop().time()
+        }},
         upsert=True
     )
-    print(f"� Session for {username} saved to DB.")
+    print(f"💾 Session for {username} on {platform} saved to DB.")
 
 # 4. Global Browser Profile (Updated: Removed local user_data_dir persistence)
 # We still need a profile for basic settings, but cookies/state are handled separately.
@@ -118,63 +124,83 @@ class TaskRequest(BaseModel):
     rules: str = ""
     username: str = ""
     password: str = ""
+    platform_name: str = "LinkedIn"  # Default to LinkedIn for backward compatibility
+    login_url: str = ""              # Optional: specify if different from platform root
+
+def generate_task_prompt(request: TaskRequest):
+    """Generates a dynamic prompt based on the requested platform."""
+    # Logic for target and search
+    is_url = request.url.lower().startswith("http")
+    target_url = request.url if is_url else ""
+    search_context = request.url if not is_url else "jobs matching my skills"
+    
+    # Platform specific defaults
+    platform = request.platform_name.strip()
+    
+    # SMART DETECTION: If platform is default (LinkedIn) but URL suggests otherwise
+    if platform.lower() == "linkedin" and "indeed.com" in request.url.lower():
+        platform = "Indeed"
+    elif platform.lower() == "linkedin" and "glassdoor.com" in request.url.lower():
+        platform = "Glassdoor"
+    
+    login_url = request.login_url or f"https://www.{platform.lower()}.com/login"
+    
+    # Override for LinkedIn specifically if needed
+    if platform.lower() == "linkedin" and not target_url:
+        target_url = "https://www.linkedin.com/jobs/"
+    elif platform.lower() == "indeed" and not target_url:
+        target_url = "https://www.indeed.com/"
+
+    prompt = f"""
+    Goal: Apply for jobs on {platform}.
+    
+    1. Login Check:
+       - Go to '{login_url}'
+       - If you are already logged in (you see your profile, feed, or dashboard), proceed to step 2.
+       - If you see a login form, use these credentials:
+         Username: {request.username}
+         Password: {request.password}
+       - Submit the form and wait for the page to load.
+       - If you see a 'Verify you are human' or CAPTCHA, ask for help if you cannot solve it.
+
+    2. Job Application:
+       - Navigate to {target_url or 'the site homepage'}
+       - If you are not already at the job page, search for "{search_context}".
+       - Find a job with a 'Quick Apply', 'Easy Apply', or 'Apply Now' button.
+       - Start the application process using this resume context:
+       ---
+       {request.resume_text[:2000]}
+       ---
+
+    3. Form Handling (Universal Guide):
+       - You will likely encounter multi-step application forms.
+       - For radio buttons and checkboxes (e.g., 'Yes/No', 'Work Authorization'):
+         - Look for the option index. CLICK it directly.
+         - If the actual inputs are hidden, click the corresponding label text.
+       - For text inputs (Years of Experience, Notice Period, Salary Expectation):
+         - Fill them accurately based on the resume.
+       - Always look for 'Next', 'Continue', or 'Save and continue' to proceed.
+       - Final Step: Once you reach the 'Review' or 'Submit' page, click 'Submit application'.
+
+    CRITICAL RULES:
+    1. STOP AFTER ONE APPLICATION: Once you have successfully submitted ONE application (clicked the final 'Submit' button and seen a confirmation), you MUST STOP and return the result of that one application. DO NOT try to apply for multiple jobs in one run.
+    2. SESSION PERSISTENCE: Handle any 'Stay signed in' popups or cookie banners by dismissing them. Disable the Chrome 'Save password' popup if it appears.
+    3. RE-TEST: If a platform-specific selector fails, try a generic one.
+    """
+    return prompt
 
 @app.post("/run-task")
 async def run_task(request: TaskRequest):
     global global_browser
-    print(f"📥 Received Request: url={request.url}, resume_len={len(request.resume_text)}")
+    print(f"📥 Received Request: platform={request.platform_name}, url={request.url}")
     try:
-        # 0. Manual Pause for Window Visibility
-        await asyncio.sleep(2.0)
-
-        # 1. Load Session from DB
-        print(f"🚦 [Task] Loading session for {request.username}...")
-        session_data = await load_session(request.username)
+        # 1. Load Session from DB (Platform Isolated)
+        print(f"🚦 [Task] Loading session for {request.username} on {request.platform_name}...")
+        session_data = await load_session(request.username, request.platform_name)
         
-        # 2. Determine Mode (AI Task)
-        is_direct_job = ("view" in request.url or "currentJobId" in request.url) and "login" not in request.url.lower()
-        is_url = request.url.lower().startswith("http")
-        
-        target_url = request.url if is_url else "https://www.linkedin.com/jobs/"
-        if "login" in target_url.lower():
-            target_url = "https://www.linkedin.com/jobs/"
-        
-        search_context = request.url if not is_url else "jobs matching my skills"
-        
-        logging.info(f"🚀 MODE: {'DIRECT APPLY' if is_direct_job else 'SEARCH & APPLY'}")
-
-        # 3. Prepare AI Prompt with Login Logic
-        full_task = f"""
-        Goal: Apply for jobs on LinkedIn.
-        
-        1. Login Check:
-           - Go to 'https://www.linkedin.com/login'
-           - If you are already logged in (you see your feed or jobs), proceed to step 2.
-           - If you see a login form, use these credentials:
-             Username: {request.username}
-             Password: {request.password}
-           - Submit the form and wait for the dashboard to load.
-
-        2. Job Application:
-           - Navigate to {target_url}
-           - If you see a search bar, search for "{search_context}".
-           - Find a job with 'Easy Apply' and apply using this resume context:
-           ---
-           {request.resume_text[:2000]}
-           ---
-
-        3. Form Handling (Crucial):
-           - In LinkedIn 'Easy Apply' modals, you will encounter 'Additional Questions'.
-           - For radio buttons and checkboxes:
-             - They should now be indexed. Look for the 'Yes', 'No', or relevant option index.
-             - If you see an index for the input, CLICK it directly.
-             - If you don't see an index, you can still try to click the text label.
-           - For text inputs (Experience, Notice Period, etc.), enter the value and move on.
-           - Always click 'Next' or 'Continue' to proceed until you reach the 'Review' page.
-           - On the 'Review' page, click 'Submit application'.
-
-        CRITICAL: Handle any security popups or 'Stay signed in' prompts by dismissing them. Disable the Chrome 'Save password' popup if it appears.
-        """
+        # 2. Prepare dynamic AI Prompt
+        full_task = generate_task_prompt(request)
+        logging.info(f"🚀 MODE: Multi-Platform Action ({request.platform_name})")
 
         print(f"📋 TASK CREATED ({len(full_task)} chars) | Mode: Full AI Control")
 
@@ -217,16 +243,15 @@ async def run_task(request: TaskRequest):
         print(f"🚀 HANDOVER SUCCESSFUL: Agent starting run...")
 
         # 5. Run Agent
-        history = await agent.run(max_steps=30)
+        history = await agent.run(max_steps=35)
         
         # 6. Save updated Session back to DB
         try:
             if agent.browser_session:
-                print("💾 Extracting updated session state...")
-                # browser-use's BrowserSession has _cdp_get_storage_state
+                print(f"💾 Extracting updated session state for {request.platform_name}...")
                 updated_state = await agent.browser_session._cdp_get_storage_state()
                 if updated_state:
-                    await save_session(request.username, updated_state)
+                    await save_session(request.username, request.platform_name, updated_state)
         except Exception as se:
             print(f"⚠️ Failed to save session: {se}")
         finally:

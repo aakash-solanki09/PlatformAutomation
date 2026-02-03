@@ -3,7 +3,7 @@ const fs = require('fs');
 const { PDFParse } = require('pdf-parse');
 const { updateAppStatus } = require('./applicationService');
 
-const triggerAgent = async (applicationId, jobUrl, resumePath, rules, credentials) => {
+const triggerAgent = async (applicationId, jobUrl, resumePath, rules, credentials, platformName) => {
   try {
     await updateAppStatus(applicationId, {
       logs: [{ message: 'Extracting resume intelligence from PDF...', timestamp: new Date() }]
@@ -58,7 +58,8 @@ const triggerAgent = async (applicationId, jobUrl, resumePath, rules, credential
       resume_text: optimizedResume,
       rules: rules,
       username: credentials.username,
-      password: credentials.password
+      password: credentials.password,
+      platform_name: platformName
     });
 
     const resultText = response.data.result ? String(response.data.result) : "No result provided";

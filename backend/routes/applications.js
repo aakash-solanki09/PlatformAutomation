@@ -19,7 +19,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 router.post('/apply', upload.single('resume'), async (req, res) => {
-  const { jobUrl, rules, username, password } = req.body;
+  const { jobUrl, rules, username, password, platformName } = req.body;
   
   if (!req.file) {
     return res.status(400).json({ error: 'Resume file is required' });
@@ -33,6 +33,7 @@ router.post('/apply', upload.single('resume'), async (req, res) => {
       resumePath: req.file.path,
       rules,
       credentials: { username, password },
+      platformName: platformName || 'LinkedIn',
       status: 'processing',
       logs: [{ message: 'Mission control: File upload verified. Initializing agent...' }],
       createdAt: new Date()
@@ -51,7 +52,7 @@ router.post('/apply', upload.single('resume'), async (req, res) => {
     }
 
     // Trigger local Python agent
-    triggerAgent(applicationId, jobUrl, req.file.path, rules, { username, password });
+    triggerAgent(applicationId, jobUrl, req.file.path, rules, { username, password }, platformName || 'LinkedIn');
 
     res.status(202).json({
       message: 'Agent deployment initiated locally',
