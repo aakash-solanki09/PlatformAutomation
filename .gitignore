@@ -8,3 +8,11 @@ node_modules/
 *.log
 dist/
 build/
+uploads/
+browser-use-user-data-dir*
+*.pdf
+# Ignore browser data
+**/.cache/
+**/.local/
+**/.mozilla/
+**/.config/
