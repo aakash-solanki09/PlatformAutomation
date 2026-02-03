@@ -5,3 +5,4 @@ python-dotenv
 browser-use
 langchain-openai
 playwright
+motor
