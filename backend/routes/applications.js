@@ -1,77 +1,71 @@
 const express = require('express');
 const router = express.Router();
+const Application = require('../models/Application');
+const UserData = require('../models/UserData'); // Added to fetch user data
 const multer = require('multer');
 const path = require('path');
-const mongoose = require('mongoose');
-const Application = require('../models/Application');
-const { triggerAgent } = require('../services/localAgentService');
-const { updateAppStatus, getAppById, saveToMemory } = require('../services/applicationService');
+const fs = require('fs');
+const { triggerAgent: runAutomation } = require('../services/localAgentService');
 
+const uploadDir = path.join(__dirname, '../uploads');
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
+const upload = multer({ storage });
 
-const upload = multer({ storage: storage });
+const auth = require('../middleware/auth');
 
-router.post('/apply', upload.single('resume'), async (req, res) => {
-  const { jobUrl, rules, username, password, platformName } = req.body;
-  
-  if (!req.file) {
-    return res.status(400).json({ error: 'Resume file is required' });
-  }
-
-  const isDBConnected = mongoose.connection.readyState === 1;
-
+// Apply for a job
+router.post('/apply', auth, upload.single('resume'), async (req, res) => {
   try {
-    const appData = {
-      jobUrl,
-      resumePath: req.file.path,
-      rules,
-      credentials: { username, password },
-      platformName: platformName || 'LinkedIn',
-      status: 'processing',
-      logs: [{ message: 'Mission control: File upload verified. Initializing agent...' }],
-      createdAt: new Date()
-    };
+    const { jobUrl, rules, username, password, platformName } = req.body;
+    let resumePath = req.file ? req.file.path : null;
 
-    let applicationId;
-
-    if (isDBConnected) {
-      const application = new Application(appData);
-      await application.save();
-      applicationId = application._id;
-    } else {
-      applicationId = 'mem_' + Date.now();
-      appData._id = applicationId;
-      saveToMemory(applicationId, appData);
+    // If no resume uploaded, try to get from user profile
+    if (!resumePath) {
+      const userData = await UserData.findOne({ userId: req.user.id });
+      if (userData && userData.resumePath) {
+        resumePath = userData.resumePath;
+      }
     }
 
-    // Trigger local Python agent
-    triggerAgent(applicationId, jobUrl, req.file.path, rules, { username, password }, platformName || 'LinkedIn');
+    if (!resumePath) {
+      return res.status(400).json({ error: 'Resume is required. Please upload one or fill your profile.' });
+    }
 
-    res.status(202).json({
-      message: 'Agent deployment initiated locally',
-      applicationId: applicationId
+    const application = new Application({
+      jobUrl,
+      resumePath: resumePath.replace(/\\/g, '/'),
+      rules,
+      credentials: { username, password },
+      status: 'processing',
+      userId: req.user.id
     });
+
+    await application.save();
+
+    // Start automation in background
+    runAutomation(application._id, platformName).catch(err => {
+      console.error('Automation background error:', err);
+    });
+
+    res.json({ applicationId: application._id });
   } catch (err) {
-    console.error('Apply error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
+// Get status and logs
 router.get('/status/:id', async (req, res) => {
   try {
-    const application = await getAppById(req.params.id);
-    if (!application) return res.status(404).json({ error: 'Application not found' });
-    res.json(application);
+    const app = await Application.findById(req.params.id);
+    if (!app) return res.status(404).json({ error: 'Not found' });
+    res.json({ status: app.status, logs: app.logs });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 module.exports = router;

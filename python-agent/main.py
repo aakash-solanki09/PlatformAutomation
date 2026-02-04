@@ -162,7 +162,7 @@ def generate_task_prompt(request: TaskRequest):
          Password: {request.password}
        - Submit the form and wait for the page to load.
        - If you see a 'Verify you are human' or CAPTCHA, ask for help if you cannot solve it.
-
+ 
     2. Job Application:
        - Navigate to {target_url or 'the site homepage'}
        - If you are not already at the job page, search for "{search_context}".
@@ -171,7 +171,7 @@ def generate_task_prompt(request: TaskRequest):
        ---
        {request.resume_text[:2000]}
        ---
-
+ 
     3. Form Handling (Universal Guide):
        - You will likely encounter multi-step application forms.
        - For radio buttons and checkboxes (e.g., 'Yes/No', 'Work Authorization'):
@@ -179,13 +179,20 @@ def generate_task_prompt(request: TaskRequest):
          - If the actual inputs are hidden, click the corresponding label text.
        - For text inputs (Years of Experience, Notice Period, Salary Expectation):
          - Fill them accurately based on the resume.
+       - For Autocomplete / Combobox / Typeahead fields (e.g., Location, Skills, Company):
+         - TYPE the value first.
+         - WAIT 1-2 seconds for suggestions to appear.
+         - IMPORTANT: You MUST CLICK one of the suggested items from the resulting list/dropdown to validate the field. Simply typing and pressing Enter often fails.
        - Always look for 'Next', 'Continue', or 'Save and continue' to proceed.
        - Final Step: Once you reach the 'Review' or 'Submit' page, click 'Submit application'.
-
+ 
     CRITICAL RULES:
     1. STOP AFTER ONE APPLICATION: Once you have successfully submitted ONE application (clicked the final 'Submit' button and seen a confirmation), you MUST STOP and return the result of that one application. DO NOT try to apply for multiple jobs in one run.
     2. SESSION PERSISTENCE: Handle any 'Stay signed in' popups or cookie banners by dismissing them. Disable the Chrome 'Save password' popup if it appears.
     3. RE-TEST: If a platform-specific selector fails, try a generic one.
+    
+    ADDITIONAL USER INSTRUCTIONS & CONTEXT:
+    {request.rules}
     """
     return prompt
 
@@ -243,7 +250,7 @@ async def run_task(request: TaskRequest):
         print(f"🚀 HANDOVER SUCCESSFUL: Agent starting run...")
 
         # 5. Run Agent
-        history = await agent.run(max_steps=35)
+        history = await agent.run(max_steps=50)
         
         # 6. Save updated Session back to DB
         try:
