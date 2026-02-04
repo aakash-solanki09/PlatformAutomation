@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 const applicationRoutes = require('./routes/applications');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
+const platformCredentialsRoutes = require('./routes/platformCredentials');
 const path = require('path');
 const fs = require('fs');
 
@@ -26,9 +27,11 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(uploadDir));
 
-app.use('/api', applicationRoutes);
+// Route Registration
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/platforms', platformCredentialsRoutes);
+app.use('/api', applicationRoutes); // Mount this last as it's the most generic
 
 
 // MongoDB Connection
@@ -38,18 +41,12 @@ mongoose.connect(process.env.MONGODB_URI)
 ✅ MONGODB ATLAS CONNECTED
 ──────────────────────────────────────────
 🚀 SERVER LIVE: http://localhost:${PORT}
-📂 UPLOADS: ${uploadDir}
-🛠️ MODE: Enterprise (Persistent DB)
     `);
   })
   .catch(err => {
     console.warn('\n⚠️ MONGODB CONNECTION FAILED');
     console.error('Error:', err.message);
-    console.log(`
-🚀 SERVER LIVE: http://localhost:${PORT}
-📂 UPLOADS: ${uploadDir}
-🛠️ MODE: Hyper-Lite (Session-Only)
-    `);
   });
 
 app.listen(PORT);
+ village:32

@@ -1,5 +1,6 @@
 const axios = require('axios');
 const fs = require('fs');
+const path = require('path');
 const { updateAppStatus } = require('./applicationService');
 const SubmissionRecord = require('../models/SubmissionRecord');
 const Application = require('../models/Application');
@@ -17,19 +18,43 @@ const triggerAgent = async (applicationId, platformNameOverride) => {
     });
 
     let resumeText = '';
-    if (resumePath && fs.existsSync(resumePath)) {
+    const absolutePathForAgent = path.resolve(resumePath);
+    console.log(`🔍 [Backend Diagnostic] Target Path: ${absolutePathForAgent}`);
+    
+    if (resumePath && fs.existsSync(absolutePathForAgent)) {
       try {
-        const { PDFParse } = require('pdf-parse');
-        const dataBuffer = fs.readFileSync(resumePath);
-        const parser = new PDFParse({ data: dataBuffer });
-        const pdfData = await parser.getText();
-        resumeText = pdfData.text;
+        const pdfLib = require('pdf-parse');
+        let pdfData;
+
+        // Versatile loader to handle different pdf-parse variants and export styles
+        if (typeof pdfLib === 'function') {
+          const dataBuffer = fs.readFileSync(absolutePathForAgent);
+          pdfData = await pdfLib(dataBuffer);
+        } else if (pdfLib.PDFParse && typeof pdfLib.PDFParse === 'function') {
+          const dataBuffer = fs.readFileSync(absolutePathForAgent);
+          // Check if it needs 'new' or just a call
+          try {
+            const parser = new pdfLib.PDFParse({ data: dataBuffer });
+            pdfData = await parser.getText();
+          } catch (e) {
+            pdfData = await pdfLib.PDFParse(dataBuffer);
+          }
+        } else if (pdfLib.default && typeof pdfLib.default === 'function') {
+          const dataBuffer = fs.readFileSync(absolutePathForAgent);
+          pdfData = await pdfLib.default(dataBuffer);
+        } else {
+          throw new Error('Could not find a valid PDF parsing function in the library');
+        }
+        
+        resumeText = pdfData?.text || 'No text extracted from PDF.';
+        console.log(`✅ [Backend Diagnostic] PDF parsed: ${resumeText.length} characters`);
       } catch (pdfError) {
-        console.error('PDF parsing error in localAgentService:', pdfError);
+        console.error('❌ [Backend Diagnostic] PDF parsing error:', pdfError.message);
         resumeText = 'Failed to extract text from PDF.';
       }
+    } else {
+      console.warn(`⚠️ [Backend Diagnostic] File NOT found at: ${absolutePathForAgent}`);
     }
-
     let optimizedResume = resumeText.substring(0, 8000);
 
     await updateAppStatus(applicationId, {
@@ -39,7 +64,7 @@ const triggerAgent = async (applicationId, platformNameOverride) => {
     const response = await axios.post('http://localhost:8012/run-task', {
       url: jobUrl,
       resume_text: optimizedResume,
-      resume_path: resumePath, // Added absolute path for file uploads
+      resume_path: absolutePathForAgent, // Added absolute path for file uploads
       rules: rules,
       username: credentials?.username || '',
       password: credentials?.password || '',

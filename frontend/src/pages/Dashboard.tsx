@@ -8,7 +8,7 @@ const API_BASE = "http://localhost:5011/api";
 function Dashboard() {
   const [jobUrl, setJobUrl] = useState("");
   const [rules, setRules] = useState("");
-  const [platform, setPlatform] = useState("LinkedIn");
+  const [platform, setPlatform] = useState("");
   const [customPlatform, setCustomPlatform] = useState("");
   const [loginUrl, setLoginUrl] = useState("");
   const [username, setUsername] = useState("");
@@ -19,23 +19,63 @@ function Dashboard() {
   const [status, setStatus] = useState<string | null>(null);
   const [logs, setLogs] = useState<any[]>([]);
   const [profileData, setProfileData] = useState<any>(null);
+  const [savedPlatforms, setSavedPlatforms] = useState<any[]>([]);
 
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       const token = localStorage.getItem("token");
       try {
-        const res = await axios.get(`${API_BASE}/user/profile`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setProfileData(res.data);
+        const [profileRes, platformsRes] = await Promise.all([
+          axios.get(`${API_BASE}/user/profile`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(`${API_BASE}/platforms`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        setProfileData(profileRes.data);
+        const platforms = platformsRes.data;
+        setSavedPlatforms(platforms);
+
+        // Default to first saved platform or "Other"
+        if (platforms.length > 0) {
+          setPlatform(platforms[0].platformName);
+        } else {
+          setPlatform("Other");
+        }
       } catch (err) {
-        console.error("Profile fetch error:", err);
+        console.error("Fetch error:", err);
+        setPlatform("Other");
       }
     };
-    fetchProfile();
+    fetchData();
   }, []);
+
+  // Auto-fill logic when platform changes
+  useEffect(() => {
+    if (platform === "Other") {
+      setCustomPlatform("");
+      setLoginUrl("");
+      setUsername("");
+      setPassword("");
+      return;
+    }
+
+    const saved = savedPlatforms.find((p) => p.platformName === platform);
+    if (saved) {
+      const url = saved.loginUrl || "";
+      setLoginUrl(url);
+      setJobUrl(url); // Also fill Job Target URL
+      setUsername(saved.username || "");
+      setPassword(saved.password || "");
+    } else {
+      setLoginUrl("");
+      setUsername("");
+      setPassword("");
+    }
+  }, [platform, savedPlatforms]);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -140,12 +180,11 @@ function Dashboard() {
                   value={platform}
                   onChange={(e) => setPlatform(e.target.value)}
                 >
-                  <option value="LinkedIn">LinkedIn</option>
-                  <option value="Indeed">Indeed</option>
-                  <option value="Glassdoor">Glassdoor</option>
-                  <option value="Naukri">Naukri</option>
-                  <option value="Wellfound">Wellfound</option>
-                  <option value="Monster">Monster</option>
+                  {savedPlatforms.map((p) => (
+                    <option key={p._id} value={p.platformName}>
+                      {p.platformName}
+                    </option>
+                  ))}
                   <option value="Other">Other (Custom)</option>
                 </select>
               </div>
@@ -217,6 +256,7 @@ function Dashboard() {
                   placeholder="Platform login"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  disabled={platform !== "Other"}
                 />
               </div>
               <div className="space-y-4">
@@ -229,6 +269,7 @@ function Dashboard() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={platform !== "Other"}
                 />
               </div>
             </div>

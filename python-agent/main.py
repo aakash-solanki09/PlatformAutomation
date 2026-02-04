@@ -75,8 +75,7 @@ async def save_session(username: str, platform: str, session_data: dict):
     )
     print(f"💾 Session for {username} on {platform} saved to DB.")
 
-# 4. Global Browser Profile (Updated: Removed local user_data_dir persistence)
-# We still need a profile for basic settings, but cookies/state are handled separately.
+# 4. Global Browser Profile
 profile = BrowserProfile(
     headless=False,
     executable_path='C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -103,8 +102,6 @@ async def get_browser():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: We skip pre-warming here to prevent timeouts.
-    # The browser will be initialized on-demand during the first request.
     print("🚀 [Lifespan] Server starting up. Browser will initialize on task start.")
     yield
     # Shutdown: Close the browser
@@ -121,24 +118,20 @@ app = FastAPI(lifespan=lifespan)
 class TaskRequest(BaseModel):
     url: str
     resume_text: str
-    resume_path: str = ""           # Absolute path for file uploads
+    resume_path: str = ""
     rules: str = ""
     username: str = ""
     password: str = ""
-    platform_name: str = "LinkedIn"  # Default to LinkedIn for backward compatibility
-    login_url: str = ""              # Optional: specify if different from platform root
+    platform_name: str = "LinkedIn"
+    login_url: str = ""
 
 def generate_task_prompt(request: TaskRequest):
     """Generates a dynamic prompt based on the requested platform."""
-    # Logic for target and search
     is_url = request.url.lower().startswith("http")
     target_url = request.url if is_url else ""
     search_context = request.url if not is_url else "jobs matching my skills"
-    
-    # Platform specific defaults
     platform = request.platform_name.strip()
     
-    # SMART DETECTION: If platform is default (LinkedIn) but URL suggests otherwise
     if platform.lower() == "linkedin" and "indeed.com" in request.url.lower():
         platform = "Indeed"
     elif platform.lower() == "linkedin" and "glassdoor.com" in request.url.lower():
@@ -146,7 +139,6 @@ def generate_task_prompt(request: TaskRequest):
     
     login_url = request.login_url or f"https://www.{platform.lower()}.com/login"
     
-    # Override for LinkedIn specifically if needed
     if platform.lower() == "linkedin" and not target_url:
         target_url = "https://www.linkedin.com/jobs/"
     elif platform.lower() == "indeed" and not target_url:
@@ -155,51 +147,38 @@ def generate_task_prompt(request: TaskRequest):
     prompt = f"""
     Goal: Apply for jobs on {platform}.
     
-    1. Login Check:
+    1. LOGIN CHECK & PERSISTENCE:
        - Go to '{login_url}'
-       - If you are already logged in (you see your profile, feed, or dashboard), proceed to step 2.
-       - If you see a login form, use these credentials:
-         Username: {request.username}
-         Password: {request.password}
-       - Submit the form and wait for the page to load.
-       - If you see a 'Verify you are human' or CAPTCHA, ask for help if you cannot solve it.
+       - **IMPORTANT**: First, check if you are already logged in (look for your profile picture, dashboard, "My Jobs", or "Logout" button).
+       - If you ARE already logged in, do NOT log our. Proceed directly to Step 2.
+       - If you ARE NOT logged in (you see a login form), use: {request.username} / {request.password}.
  
-    2. Job Application & Filtering:
-       - Navigate to {target_url or 'the site homepage'}
-       - If you are not already at the job page, search for "{search_context}".
-       - APPLY FILTERS: You MUST refine the search results before applying:
-         - Click on "All filters" or the relevant filter buttons (e.g., "Easy Apply", "Remote", "Past 24 hours").
-         - Ensure filters match the user's criteria (Remote: { "Yes" if "remote" in request.rules.lower() else "If requested" }).
-         - Crucially, ONLY apply to jobs that have a 'Quick Apply', 'Easy Apply', or 'Apply Now' button.
-       - Find a suitable job and start the application process using this resume context:
-       ---
-       {request.resume_text[:2000]}
-       ---
+    2. SMART SEARCH & ADAPTIVE FILTERING:
+       - Target: {target_url or 'Search for ' + search_context}
+       - User Rules: {request.rules}
+       - BLOCKER DETECTION (CRITICAL):
+         - If a job redirects you to an external site requiring a **Mandatory OTP (Mobile/Email)** or a **Long Registration Form** (e.g., Jobseager.com), you MUST skip it.
+         - Do not waste steps on sites that require registration from scratch.
+         - PRIORITIZE "Quick Apply", "Easy Apply", or internal platform applications.
+       - If no results are found for a filtered search, BROADEN the search (nearby cities, remote) or lower salary/CTC.
  
-    3. Form Handling (Universal Guide):
-       - You will likely encounter multi-step application forms on ANY website.
-       - RESUME FILE FOR UPLOADS: {request.resume_path}
-         - If the application form asks to upload a Resume or CV file, you MUST use the 'upload_file' tool with the absolute path provided above. This is mandatory for ALL sites.
-       - For radio buttons and checkboxes (e.g., 'Yes/No', 'Work Authorization'):
-         - Look for the option index. CLICK it directly.
-         - If the actual inputs are hidden, click the corresponding label text.
-       - For text inputs (Years of Experience, Notice Period, Salary Expectation):
-         - Fill them accurately based on the resume.
-       - For Autocomplete / Combobox / Typeahead fields (e.g., Location, Skills, Company):
-         - TYPE the value first.
-         - WAIT 1-2 seconds for suggestions to appear.
-         - IMPORTANT: You MUST CLICK one of the suggested items from the resulting list/dropdown to validate the field. Simply typing and pressing Enter often fails.
-       - Always look for 'Next', 'Continue', or 'Save and continue' to proceed.
-       - Final Step: Once you reach the 'Review' or 'Submit' page, click 'Submit application'.
+    3. MANDATORY RESUME UPLOAD (CRITICAL):
+       - FILE PATH: {request.resume_path}
+       - You MUST use the 'upload_file' tool for ANY resume or CV upload field you encounter.
+       - NEVER skip this. If the 'upload_file' tool returns an error, you MUST fix the path or try a different upload element.
+       - DO NOT assume a resume upload succeeded if the tool explicitly failed.
+ 
+    4. FORM HANDLING:
+       - Context: {request.resume_text[:2000]}
+       - Company Email: Fallback to '{request.username}'.
+       - Autocomplete: Type, WAIT, and CLICK a dropdown option.
+       - Submit once all fields are complete.
  
     CRITICAL RULES:
-    1. STOP AFTER ONE APPLICATION: Once you have successfully submitted ONE application (clicked the final 'Submit' button and seen a confirmation), you MUST STOP and return the result of that one application. DO NOT try to apply for multiple jobs in one run.
-    2. SESSION PERSISTENCE: Handle any 'Stay signed in' popups or cookie banners by dismissing them. Disable the Chrome 'Save password' popup if it appears.
-    3. RESUME UPLOAD IS UNIVERSAL: Use the provided `resume_path` for ANY and ALL file upload requests on ANY job platform or company website (LinkedIn, Naukri, Indeed, Workday, Greenhouse, etc.).
-    4. RE-TEST: If a platform-specific selector fails, try a generic one.
-    
-    ADDITIONAL USER INSTRUCTIONS & CONTEXT:
-    {request.rules}
+    1. STOP AFTER ONE SUCCESSFUL SUBMISSION.
+    2. BE DECISIVE: If a site looks like it will take more than 20 steps to navigate, skip it and move to a simpler one.
+    3. SESSION PERSISTENCE: Handle cookie banners and popups by dismissing them.
+    4. NO OTP/REGISTRATION: Abandon any application that requires an OTP or a brand-new account registration on an external site.
     """
     return prompt
 
@@ -207,88 +186,79 @@ def generate_task_prompt(request: TaskRequest):
 async def run_task(request: TaskRequest):
     global global_browser
     print(f"📥 Received Request: platform={request.platform_name}, url={request.url}")
+    
+    # --- PATH DIAGNOSTICS ---
+    authorized_paths = []
+    if request.resume_path:
+        request.resume_path = os.path.abspath(os.path.normpath(request.resume_path))
+        print(f"🔍 [Path Diagnostic] Real Path: {request.resume_path}")
+        if os.path.exists(request.resume_path):
+            print(f"✅ [Path Diagnostic] Status: EXISTS ({os.path.getsize(request.resume_path)} bytes)")
+            authorized_paths.append(request.resume_path)
+        else:
+            print(f"❌ [Path Diagnostic] Status: MISSING")
+    
     try:
-        # 1. Load Session from DB (Platform Isolated)
-        print(f"🚦 [Task] Loading session for {request.username} on {request.platform_name}...")
         session_data = await load_session(request.username, request.platform_name)
-        
-        # 2. Prepare dynamic AI Prompt
         full_task = generate_task_prompt(request)
-        logging.info(f"🚀 MODE: Multi-Platform Action ({request.platform_name})")
-
-        print(f"📋 TASK CREATED ({len(full_task)} chars) | Mode: Full AI Control")
-
-        # 4. Initialize Agent with DB Session
-        # Create a fresh profile for this specific run to handle the session
+        
         run_profile = BrowserProfile(
             headless=False,
             executable_path='C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
             disable_security=True,
             wait_for_network_idle_page_load_time=3.0,
             wait_between_actions=2.0,
-            keep_alive=True,  # ADDED: Prevent agent from killing browser so we can save session
-            extra_chromium_args=['--password-store=basic'] # ADDED: Disable 'Save password' popup
+            keep_alive=True,
+            extra_chromium_args=['--password-store=basic']
         )
 
         temp_session_file = None
         if session_data:
-            print("📝 Creating temporary session file...")
             fd, temp_session_file = tempfile.mkstemp(suffix='.json', prefix='linkedin_session_')
             os.close(fd)
             with open(temp_session_file, 'w') as f:
                 json.dump(session_data, f)
             run_profile.storage_state = temp_session_file
-            print(f"📝 Storage state profile set to: {temp_session_file}")
 
-        # Initialize a fresh browser session for this task to ensure session isolation
         task_browser = Browser(browser_profile=run_profile)
         await task_browser.start()
 
+        # FIX: Explicitly authorize the resume path for the agent
         agent = Agent(
             task=full_task,
             llm=llm,
             browser=task_browser,
             use_vision=True,
-            max_actions_per_step=4,
             max_failures=5,
-            flash_mode=True,
+            flash_mode=False,
+            available_file_paths=authorized_paths
         )
 
-        print(f"🚀 HANDOVER SUCCESSFUL: Agent starting run...")
-
-        # 5. Run Agent
-        history = await agent.run(max_steps=50)
+        # INCREASED STEP LIMIT TO 100
+        history = await agent.run(max_steps=100)
         
-        # 6. Save updated Session back to DB
         try:
             if agent.browser_session:
-                print(f"💾 Extracting updated session state for {request.platform_name}...")
                 updated_state = await agent.browser_session._cdp_get_storage_state()
                 if updated_state:
                     await save_session(request.username, request.platform_name, updated_state)
         except Exception as se:
             print(f"⚠️ Failed to save session: {se}")
         finally:
-            # Clean up browser and temp file
             await task_browser.stop()
             if temp_session_file and os.path.exists(temp_session_file):
                 try:
                     os.remove(temp_session_file)
-                    print(f"🧹 Cleaned up temp session file: {temp_session_file}")
                 except:
                     pass
 
         final_res = history.final_result()
         result = str(final_res) if final_res is not None else "Agent finished with no result."
-        
-        print(f"✅ DEBUG: Agent completed successfully")
-        
         return {"status": "completed", "result": result}
 
     except Exception as e:
         import traceback
         error_msg = traceback.format_exc()
-        logging.error(f"❌ AGENT ERROR:\n{error_msg}")
         print(f"❌ AGENT ERROR:\n{error_msg}")
         raise HTTPException(status_code=500, detail=error_msg)
 

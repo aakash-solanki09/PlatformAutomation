@@ -34,9 +34,11 @@ router.post('/apply', auth, upload.single('resume'), async (req, res) => {
       return res.status(400).json({ error: 'Resume is required. Please upload one or fill your profile.' });
     }
 
+    const absoluteResumePath = path.resolve(resumePath);
+
     const application = new Application({
       jobUrl,
-      resumePath: resumePath.replace(/\\/g, '/'),
+      resumePath: absoluteResumePath.replace(/\\/g, '/'),
       rules,
       credentials: { username, password },
       platformName,

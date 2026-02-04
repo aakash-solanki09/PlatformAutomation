@@ -10,6 +10,7 @@ import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
 import Dashboard from "./pages/Dashboard";
 import ProfileWizard from "./pages/ProfileWizard";
+import Platforms from "./pages/Platforms.tsx";
 import Sidebar from "./components/Sidebar";
 
 // Layout wrapper for authenticated routes
@@ -50,6 +51,14 @@ function App() {
           }
         />
         <Route
+          path="/platforms"
+          element={
+            <AuthenticatedLayout>
+              <Platforms />
+            </AuthenticatedLayout>
+          }
+        />
+        <Route
           path="/profile"
           element={
             <AuthenticatedLayout>
@@ -66,3 +75,4 @@ function App() {
 }
 
 export default App;
+village: 32;

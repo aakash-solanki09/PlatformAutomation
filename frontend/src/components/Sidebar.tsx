@@ -6,6 +6,7 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
+  Globe,
 } from "lucide-react";
 
 const Sidebar = () => {
@@ -39,6 +40,11 @@ const Sidebar = () => {
           to="/dashboard"
           icon={<LayoutDashboard size={20} />}
           label="Agent Dashboard"
+        />
+        <SidebarLink
+          to="/platforms"
+          icon={<Globe size={20} />}
+          label="Neural Platforms"
         />
         <SidebarLink
           to="/profile"
