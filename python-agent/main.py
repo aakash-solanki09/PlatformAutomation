@@ -150,7 +150,7 @@ def generate_task_prompt(request: TaskRequest):
     1. LOGIN CHECK & PERSISTENCE:
        - Go to '{login_url}'
        - **IMPORTANT**: First, check if you are already logged in (look for your profile picture, dashboard, "My Jobs", or "Logout" button).
-       - If you ARE already logged in, do NOT log our. Proceed directly to Step 2.
+       - If you ARE already logged in, do NOT log out. Proceed directly to Step 2.
        - If you ARE NOT logged in (you see a login form), use: {request.username} / {request.password}.
  
     2. SMART SEARCH & ADAPTIVE FILTERING:
@@ -173,6 +173,12 @@ def generate_task_prompt(request: TaskRequest):
        - Company Email: Fallback to '{request.username}'.
        - Autocomplete: Type, WAIT, and CLICK a dropdown option.
        - Submit once all fields are complete.
+ 
+    5. POST-APPLICATION TRACKING (PLATFORM SPECIFIC):
+       - On platforms like Monster/Foundit:
+         - If the application was completed on an EXTERNAL site (after clicking 'Apply' on Monster), you MUST return to the Monster job tracker/dashboard (e.g., https://www.monster.com/profile/job-tracker).
+         - Find the job you just applied for.
+         - Click the **"Mark As Applied"** button to ensure the status is correctly updated on the source platform.
  
     CRITICAL RULES:
     1. STOP AFTER ONE SUCCESSFUL SUBMISSION.
