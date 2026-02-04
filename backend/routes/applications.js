@@ -19,7 +19,7 @@ const auth = require('../middleware/auth');
 // Apply for a job
 router.post('/apply', auth, upload.single('resume'), async (req, res) => {
   try {
-    const { jobUrl, rules, username, password, platformName } = req.body;
+    const { jobUrl, rules, username, password, platformName, loginUrl } = req.body;
     let resumePath = req.file ? req.file.path : null;
 
     // If no resume uploaded, try to get from user profile
@@ -39,6 +39,8 @@ router.post('/apply', auth, upload.single('resume'), async (req, res) => {
       resumePath: resumePath.replace(/\\/g, '/'),
       rules,
       credentials: { username, password },
+      platformName,
+      loginUrl,
       status: 'processing',
       userId: req.user.id
     });

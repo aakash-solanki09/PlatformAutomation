@@ -121,6 +121,7 @@ app = FastAPI(lifespan=lifespan)
 class TaskRequest(BaseModel):
     url: str
     resume_text: str
+    resume_path: str = ""           # Absolute path for file uploads
     rules: str = ""
     username: str = ""
     password: str = ""
@@ -163,17 +164,22 @@ def generate_task_prompt(request: TaskRequest):
        - Submit the form and wait for the page to load.
        - If you see a 'Verify you are human' or CAPTCHA, ask for help if you cannot solve it.
  
-    2. Job Application:
+    2. Job Application & Filtering:
        - Navigate to {target_url or 'the site homepage'}
        - If you are not already at the job page, search for "{search_context}".
-       - Find a job with a 'Quick Apply', 'Easy Apply', or 'Apply Now' button.
-       - Start the application process using this resume context:
+       - APPLY FILTERS: You MUST refine the search results before applying:
+         - Click on "All filters" or the relevant filter buttons (e.g., "Easy Apply", "Remote", "Past 24 hours").
+         - Ensure filters match the user's criteria (Remote: { "Yes" if "remote" in request.rules.lower() else "If requested" }).
+         - Crucially, ONLY apply to jobs that have a 'Quick Apply', 'Easy Apply', or 'Apply Now' button.
+       - Find a suitable job and start the application process using this resume context:
        ---
        {request.resume_text[:2000]}
        ---
  
     3. Form Handling (Universal Guide):
-       - You will likely encounter multi-step application forms.
+       - You will likely encounter multi-step application forms on ANY website.
+       - RESUME FILE FOR UPLOADS: {request.resume_path}
+         - If the application form asks to upload a Resume or CV file, you MUST use the 'upload_file' tool with the absolute path provided above. This is mandatory for ALL sites.
        - For radio buttons and checkboxes (e.g., 'Yes/No', 'Work Authorization'):
          - Look for the option index. CLICK it directly.
          - If the actual inputs are hidden, click the corresponding label text.
@@ -189,7 +195,8 @@ def generate_task_prompt(request: TaskRequest):
     CRITICAL RULES:
     1. STOP AFTER ONE APPLICATION: Once you have successfully submitted ONE application (clicked the final 'Submit' button and seen a confirmation), you MUST STOP and return the result of that one application. DO NOT try to apply for multiple jobs in one run.
     2. SESSION PERSISTENCE: Handle any 'Stay signed in' popups or cookie banners by dismissing them. Disable the Chrome 'Save password' popup if it appears.
-    3. RE-TEST: If a platform-specific selector fails, try a generic one.
+    3. RESUME UPLOAD IS UNIVERSAL: Use the provided `resume_path` for ANY and ALL file upload requests on ANY job platform or company website (LinkedIn, Naukri, Indeed, Workday, Greenhouse, etc.).
+    4. RE-TEST: If a platform-specific selector fails, try a generic one.
     
     ADDITIONAL USER INSTRUCTIONS & CONTEXT:
     {request.rules}

@@ -9,6 +9,8 @@ function Dashboard() {
   const [jobUrl, setJobUrl] = useState("");
   const [rules, setRules] = useState("");
   const [platform, setPlatform] = useState("LinkedIn");
+  const [customPlatform, setCustomPlatform] = useState("");
+  const [loginUrl, setLoginUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
@@ -65,7 +67,11 @@ function Dashboard() {
     const token = localStorage.getItem("token");
     const formData = new FormData();
     formData.append("jobUrl", jobUrl);
-    formData.append("platformName", platform);
+    formData.append(
+      "platformName",
+      platform === "Other" ? customPlatform : platform,
+    );
+    formData.append("loginUrl", loginUrl);
     formData.append("username", username);
     formData.append("password", password);
 
@@ -137,21 +143,69 @@ function Dashboard() {
                   <option value="LinkedIn">LinkedIn</option>
                   <option value="Indeed">Indeed</option>
                   <option value="Glassdoor">Glassdoor</option>
+                  <option value="Naukri">Naukri</option>
+                  <option value="Wellfound">Wellfound</option>
+                  <option value="Monster">Monster</option>
+                  <option value="Other">Other (Custom)</option>
                 </select>
               </div>
-              <div className="space-y-4">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
-                  Job Target URL
-                </label>
-                <input
-                  required
-                  className="w-full px-8 py-5 rounded-3xl input-glass outline-none text-white"
-                  placeholder="https://www.linkedin.com/jobs/..."
-                  value={jobUrl}
-                  onChange={(e) => setJobUrl(e.target.value)}
-                />
-              </div>
+              {platform === "Other" ? (
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
+                    Custom Platform Name
+                  </label>
+                  <input
+                    required
+                    className="w-full px-8 py-5 rounded-3xl input-glass outline-none text-white"
+                    placeholder="e.g. Hired, Otta"
+                    value={customPlatform}
+                    onChange={(e) => setCustomPlatform(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
+                    Job Target URL
+                  </label>
+                  <input
+                    required
+                    className="w-full px-8 py-5 rounded-3xl input-glass outline-none text-white"
+                    placeholder="https://..."
+                    value={jobUrl}
+                    onChange={(e) => setJobUrl(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
+
+            {platform === "Other" && (
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
+                    Platform Login URL
+                  </label>
+                  <input
+                    required
+                    className="w-full px-8 py-5 rounded-3xl input-glass outline-none text-white"
+                    placeholder="https://platform.com/login"
+                    value={loginUrl}
+                    onChange={(e) => setLoginUrl(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
+                    Job Target URL
+                  </label>
+                  <input
+                    required
+                    className="w-full px-8 py-5 rounded-3xl input-glass outline-none text-white"
+                    placeholder="https://..."
+                    value={jobUrl}
+                    onChange={(e) => setJobUrl(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-4">

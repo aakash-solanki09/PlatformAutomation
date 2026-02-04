@@ -9,6 +9,8 @@ const ApplicationSchema = new mongoose.Schema({
     username: { type: String },
     password: { type: String }
   },
+  platformName: { type: String },
+  loginUrl: { type: String },
   status: { type: String, default: 'pending' }, 
   logs: [{
     timestamp: { type: Date, default: Date.now },

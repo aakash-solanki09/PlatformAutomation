@@ -9,7 +9,7 @@ const triggerAgent = async (applicationId, platformNameOverride) => {
     const application = await Application.findById(applicationId);
     if (!application) throw new Error('Application not found');
 
-    const { jobUrl, resumePath, rules, credentials, userId } = application;
+    const { jobUrl, resumePath, rules, credentials, userId, loginUrl } = application;
     const platformName = platformNameOverride || 'LinkedIn';
 
     await updateAppStatus(applicationId, {
@@ -39,10 +39,12 @@ const triggerAgent = async (applicationId, platformNameOverride) => {
     const response = await axios.post('http://localhost:8012/run-task', {
       url: jobUrl,
       resume_text: optimizedResume,
+      resume_path: resumePath, // Added absolute path for file uploads
       rules: rules,
       username: credentials?.username || '',
       password: credentials?.password || '',
-      platform_name: platformName
+      platform_name: platformName,
+      login_url: loginUrl || ''
     });
 
     const isSuccess = response.data.status === 'completed';
