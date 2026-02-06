@@ -28,6 +28,7 @@ const ProfileWizard = () => {
       noticePeriod: "",
       remoteOnly: false,
       visaStatus: "",
+      chromeProfilePath: "",
     },
     aiProcessedData: {} as any,
   });
@@ -249,6 +250,29 @@ const ProfileWizard = () => {
                     })
                   }
                 />
+              </div>
+              <div className="space-y-3 md:col-span-2">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  Chrome Profile Path (For Indeed/Glassdoor)
+                </label>
+                <input
+                  className="w-full px-8 py-5 rounded-3xl input-glass outline-none text-white text-lg"
+                  placeholder="e.g. C:\Users\Name\AppData\Local\Google\Chrome\User Data\Default"
+                  value={profile.preferences.chromeProfilePath}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      preferences: {
+                        ...profile.preferences,
+                        chromeProfilePath: e.target.value,
+                      },
+                    })
+                  }
+                />
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-4">
+                  Required for platforms without passwords. Use your local 'User
+                  Data' path.
+                </p>
               </div>
               <div className="flex items-center justify-between p-6 rounded-3xl bg-white/5 border border-white/5 mt-4">
                 <span className="text-sm font-black text-slate-300 uppercase tracking-widest">

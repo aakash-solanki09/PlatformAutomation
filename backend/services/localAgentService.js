@@ -4,6 +4,7 @@ const path = require('path');
 const { updateAppStatus } = require('./applicationService');
 const SubmissionRecord = require('../models/SubmissionRecord');
 const Application = require('../models/Application');
+const UserData = require('../models/UserData');
 
 const triggerAgent = async (applicationId, platformNameOverride) => {
   try {
@@ -61,6 +62,9 @@ const triggerAgent = async (applicationId, platformNameOverride) => {
       logs: [{ message: `Resume processed (${optimizedResume.length} chars). Sending to local agent...`, timestamp: new Date() }]
     });
 
+    const userData = await UserData.findOne({ userId: userId });
+    const chromeProfilePath = userData?.preferences?.chromeProfilePath || '';
+
     const response = await axios.post('http://localhost:8012/run-task', {
       url: jobUrl,
       resume_text: optimizedResume,
@@ -69,7 +73,8 @@ const triggerAgent = async (applicationId, platformNameOverride) => {
       username: credentials?.username || '',
       password: credentials?.password || '',
       platform_name: platformName,
-      login_url: loginUrl || ''
+      login_url: loginUrl || '',
+      chrome_profile_path: chromeProfilePath
     });
 
     const isSuccess = response.data.status === 'completed';

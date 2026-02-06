@@ -10,7 +10,8 @@ const UserDataSchema = new mongoose.Schema({
     location: { type: String },
     noticePeriod: { type: String },
     remoteOnly: { type: Boolean, default: false },
-    visaStatus: { type: String }
+    visaStatus: { type: String },
+    chromeProfilePath: { type: String }
   },
   aiProcessedData: {
     type: Object,

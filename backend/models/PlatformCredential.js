@@ -5,7 +5,7 @@ const PlatformCredentialSchema = new mongoose.Schema({
   platformName: { type: String, required: true },
   loginUrl: { type: String },
   username: { type: String, required: true },
-  password: { type: String, required: true },
+  password: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
 

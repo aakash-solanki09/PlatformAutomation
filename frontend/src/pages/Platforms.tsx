@@ -173,19 +173,23 @@ function Platforms() {
                   onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
-              <div className="space-y-4">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
-                  Password
-                </label>
-                <input
-                  required
-                  type="password"
-                  className="w-full px-8 py-5 rounded-3xl input-glass outline-none text-white"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
+              {platformName !== "Indeed" && platformName !== "Glassdoor" && (
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
+                    Password
+                  </label>
+                  <input
+                    required={
+                      platformName !== "Indeed" && platformName !== "Glassdoor"
+                    }
+                    type="password"
+                    className="w-full px-8 py-5 rounded-3xl input-glass outline-none text-white"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
 
             <button
@@ -244,12 +248,48 @@ function Platforms() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDelete(cred._id)}
-                    className="p-4 rounded-xl text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                  >
-                    <Trash2 size={20} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {(cred.platformName === "Indeed" ||
+                      cred.platformName === "Glassdoor") && (
+                      <button
+                        onClick={async () => {
+                          const token = localStorage.getItem("token");
+                          try {
+                            setSaving(true);
+                            await axios.post(
+                              `${API_BASE}/initialize`,
+                              {
+                                platformName: cred.platformName,
+                                username: cred.username,
+                                loginUrl:
+                                  cred.loginUrl ||
+                                  (cred.platformName === "Indeed"
+                                    ? "https://secure.indeed.com/account/login"
+                                    : "https://www.glassdoor.com/index.htm"),
+                              },
+                              {
+                                headers: { Authorization: `Bearer ${token}` },
+                              },
+                            );
+                            alert("Initialization complete! Session captured.");
+                          } catch (err) {
+                            alert("Initialization failed.");
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                        className="px-4 py-2 rounded-xl bg-blue-600/20 text-blue-400 text-[10px] font-black uppercase tracking-widest hover:bg-blue-600/30 transition-all border border-blue-500/20"
+                      >
+                        Initialize
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(cred._id)}
+                      className="p-4 rounded-xl text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -261,4 +301,3 @@ function Platforms() {
 }
 
 export default Platforms;
-village: 32;

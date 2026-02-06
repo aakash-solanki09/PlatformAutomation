@@ -82,6 +82,14 @@ profile = BrowserProfile(
     disable_security=True,
     wait_for_network_idle_page_load_time=3.0,
     wait_between_actions=2.0,
+    extra_chromium_args=[
+        '--disable-blink-features=AutomationControlled',
+        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        '--window-size=1920,1080',
+        '--no-sandbox',
+        '--disable-infobars',
+        '--password-store=basic'
+    ]
 )
 
 # Global browser instance container
@@ -151,7 +159,9 @@ def generate_task_prompt(request: TaskRequest):
        - Go to '{login_url}'
        - **IMPORTANT**: First, check if you are already logged in (look for your profile picture, dashboard, "My Jobs", or "Logout" button).
        - If you ARE already logged in, do NOT log out. Proceed directly to Step 2.
-       - If you ARE NOT logged in (you see a login form), use: {request.username} / {request.password}.
+       - If you ARE NOT logged in (you see a login form):
+         - For Indeed/Glassdoor: If no password is provided ({request.password}), inform the user that the session has expired and they MUST re-initialize via the Platforms page.
+         - For other platforms: Use {request.username} / {request.password}.
  
     2. SMART SEARCH & ADAPTIVE FILTERING:
        - Target: {target_url or 'Search for ' + search_context}
@@ -215,9 +225,16 @@ async def run_task(request: TaskRequest):
             wait_for_network_idle_page_load_time=3.0,
             wait_between_actions=2.0,
             keep_alive=True,
-            extra_chromium_args=['--password-store=basic']
+            extra_chromium_args=[
+                '--disable-blink-features=AutomationControlled',
+                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                '--window-size=1920,1080',
+                '--no-sandbox',
+                '--disable-infobars',
+                '--password-store=basic'
+            ]
         )
-
+        
         temp_session_file = None
         if session_data:
             fd, temp_session_file = tempfile.mkstemp(suffix='.json', prefix='linkedin_session_')
@@ -266,6 +283,100 @@ async def run_task(request: TaskRequest):
         import traceback
         error_msg = traceback.format_exc()
         print(f"❌ AGENT ERROR:\n{error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
+
+class SessionCaptureRequest(BaseModel):
+    username: str
+    platform_name: str
+    login_url: str
+
+@app.post("/capture-session")
+async def capture_session(request: SessionCaptureRequest):
+    """
+    Interactive session capture. 
+    Opens browser, inputs email, and waits 60 seconds for manual OTP/Login.
+    """
+    global global_browser
+    print(f"📥 Received Capture Request: platform={request.platform_name}, user={request.username}")
+    
+    try:
+        import subprocess
+        import tempfile
+        import shutil
+
+        # Create a clean temp directory for this capture session
+        user_data_dir = os.path.join(tempfile.gettempdir(), f"indeed_capture_{request.username.split('@')[0]}")
+        if os.path.exists(user_data_dir):
+            try: shutil.rmtree(user_data_dir)
+            except: pass
+        os.makedirs(user_data_dir, exist_ok=True)
+
+        chrome_path = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+        debugging_port = 9222
+
+        # Launch REAL Chrome via OS (Completely detached from automation initially)
+        cmd = [
+            chrome_path,
+            f"--remote-debugging-port={debugging_port}",
+            f"--user-data-dir={user_data_dir}",
+            "--no-first-run",
+            "--no-default-browser-check",
+            request.login_url
+        ]
+        
+        print(f"🌐 [Capture] Launching REAL Chrome: {request.login_url}")
+        proc = subprocess.Popen(cmd)
+
+        print("\n" + "!"*60)
+        print("🚀 [ULTIMATE STEALTH MODE ACTIVE]")
+        print("1. A REAL CHROME WINDOW HAS OPENED.")
+        print("2. THE AGENT IS NOT CONNECTED YET (COMPLETELY INVISIBLE TO INDEED).")
+        print("3. PLEASE PERFORM YOUR FULL LOGIN NOW.")
+        print(f"4. YOU HAVE 120 SECONDS BEFORE THE AGENT CONNECTS TO SAVE.")
+        print("!"*60 + "\n")
+
+        # Countdown
+        for i in range(120, 0, -1):
+            if i % 10 == 0 or i <= 5:
+                print(f"⏳ [Capture] {i} seconds remaining until capture...")
+            await asyncio.sleep(1)
+
+        # Connect via CDP to save session
+        try:
+            print("\n🔗 [Capture] Connecting to browser to grab session...")
+            # We create a simple browser instance pointing to the CDP URL
+            capture_browser = Browser(
+                browser_profile=BrowserProfile(
+                    cdp_url=f"http://localhost:{debugging_port}",
+                    keep_alive=True
+                )
+            )
+            await capture_browser.start()
+            
+            updated_state = await capture_browser.export_storage_state()
+            if updated_state:
+                if isinstance(updated_state, str):
+                    import json
+                    updated_state = json.loads(updated_state)
+                await save_session(request.username, request.platform_name, updated_state)
+                print(f"✅ [Capture] Session successfully saved for {request.username}")
+            else:
+                print("❌ [Capture] Failed to grab session state.")
+            
+            await capture_browser.stop()
+        except Exception as se:
+            print(f"⚠️ [Capture] Error during session capture: {se}")
+        finally:
+            # Kill the external chrome process
+            try: proc.terminate()
+            except: pass
+
+        return {"status": "completed", "message": "Ultimate stealth capture finished."}
+
+    except Exception as e:
+        import traceback
+        error_msg = traceback.format_exc()
+        print(f"❌ CAPTURE ERROR:\n{error_msg}")
         raise HTTPException(status_code=500, detail=error_msg)
 
 if __name__ == "__main__":

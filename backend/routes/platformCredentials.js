@@ -13,7 +13,6 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Save or update credentials for a platform
 router.post('/', auth, async (req, res) => {
   try {
     const { platformName, loginUrl, username, password } = req.body;
@@ -27,6 +26,26 @@ router.post('/', auth, async (req, res) => {
     res.json(credential);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+const axios = require('axios');
+// Trigger interactive login capture
+router.post('/initialize', auth, async (req, res) => {
+  try {
+    const { platformName, username, loginUrl } = req.body;
+    
+    // Call Python agent to start capture
+    const response = await axios.post('http://localhost:8012/capture-session', {
+      username,
+      platform_name: platformName,
+      login_url: loginUrl
+    });
+
+    res.json(response.data);
+  } catch (err) {
+    console.error('Initialization error:', err.message);
+    res.status(500).json({ error: 'Failed to initialize session capture' });
   }
 });
 
